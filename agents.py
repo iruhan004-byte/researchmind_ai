@@ -1,6 +1,7 @@
 import os
+import streamlit as st
 from dotenv import load_dotenv
-from langchain.agents import create_agent
+from langgraph.prebuilt import create_react_agent
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -8,26 +9,29 @@ from tools import scrape_webpage, duckduckgo_search
 
 load_dotenv()
 
-# Initialize Gemini 1.5 Flash model
+# Get key from st.secrets if using Streamlit secrets, or fallback to environment variable
+api_key = st.secrets.get("GOOGLE_API_KEY") if hasattr(st, "secrets") and "GOOGLE_API_KEY" in st.secrets else os.getenv("GOOGLE_API_KEY")
+
+# Initialize Gemini 1.5 Flash
 llm = ChatGoogleGenerativeAI(
     model="gemini-1.5-flash",
     temperature=0,
-    google_api_key=os.getenv("GOOGLE_API_KEY")
+    google_api_key=api_key
 )
 
 def build_research_agent():
-    return create_agent(
+    return create_react_agent(
         model=llm,
         tools=[duckduckgo_search],
-        system_prompt="""You are a research agent. Search the web for relevant information using DuckDuckGo. Find useful and reliable sources."""
+        prompt="You are a research agent. Search the web for relevant information using DuckDuckGo. Find useful and reliable sources."
     )
 
 # 2nd agent
 def build_reader_agent():
-    return create_agent(
+    return create_react_agent(
         model=llm,
         tools=[scrape_webpage],
-        system_prompt="""You are a web page reader agent. Your job is to read and analyze web pages using the scrape_webpage tool. Extract the important information from the page. Ignore irrelevant content. Do not invent information."""
+        prompt="You are a web page reader agent. Your job is to read and analyze web pages using the scrape_webpage tool. Extract important information. Ignore irrelevant content. Do not invent information."
     )
 
 writer_prompt = ChatPromptTemplate.from_template("""

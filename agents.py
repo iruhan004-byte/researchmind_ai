@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 load_dotenv()
-ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+llm=ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
 
 def build_research_agent():
     return create_agent(

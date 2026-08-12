@@ -312,6 +312,7 @@ if run_clicked and topic_input.strip():
     results = {}
     start = time.time()
     error_msg = None
+    current_step = None
 
     result_ph.markdown("""
     <div style='text-align:center;padding:80px 20px;color:#475569'>
@@ -328,6 +329,7 @@ if run_clicked and topic_input.strip():
         from agents import build_research_agent, build_reader_agent, writer_chain, critic_chain
 
         # ── Step 1: Search ──────────────────────────────
+        current_step = 1
         set_step(1, "running")
         search_agent = build_research_agent()
         sr = search_agent.invoke({"messages": [
@@ -340,6 +342,7 @@ if run_clicked and topic_input.strip():
         time.sleep(12)
 
         # ── Step 2: Reader ──────────────────────────────
+        current_step = 2
         set_step(2, "running")
         reader_agent = build_reader_agent()
         
@@ -359,6 +362,7 @@ if run_clicked and topic_input.strip():
         time.sleep(15)
 
         # ── Step 3: Writer ──────────────────────────────
+        current_step = 3
         set_step(3, "running")
         
         # Truncate research context to remain safely under the TPM limit
@@ -374,25 +378,23 @@ if run_clicked and topic_input.strip():
         time.sleep(12)
 
         # ── Step 4: Critic ──────────────────────────────
+        current_step = 4
         set_step(4, "running")
         results["feedback"] = critic_chain.invoke({"report": results["report"][:2000]})
         set_step(4, "done")
+        current_step = None
 
     except ImportError as e:
         error_msg = (f"**Import Error:** Could not import from `agents.py`.\n\n"
                      f"Make sure `app.py` is in the **same folder** as `agents.py`.\n\n"
                      f"Details: `{e}`")
-        for i in range(1, 5):
-            icon, label, desc = STEPS[i]
-            if "running" in placeholders[i]._delta_path:
-                set_step(i, "error")
+        if current_step:
+            set_step(current_step, "error")
+
     except Exception as e:
         error_msg = f"**Pipeline Error:** `{type(e).__name__}: {e}`"
-        for i in range(1, 5):
-            try:
-                set_step(i, "error")
-            except Exception:
-                pass
+        if current_step:
+            set_step(current_step, "error")
 
     elapsed = round(time.time() - start, 1)
 

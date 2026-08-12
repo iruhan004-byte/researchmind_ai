@@ -257,19 +257,16 @@ with left:
                             disabled=not topic_input.strip())
 
     st.markdown("#### 🤖 Agent Pipeline")
-    # One placeholder per step card — updated in-place (no st.rerun needed)
     placeholders = {i: st.empty() for i in range(1, 5)}
 
-    # Render initial idle cards
     for i, (icon, label, desc) in STEPS.items():
         placeholders[i].markdown(card(icon, label, desc, "idle"), unsafe_allow_html=True)
 
-    stats_ph = st.empty()   # for the stat chips after completion
+    stats_ph = st.empty()
 
 with right:
-    result_ph = st.empty()  # entire right column driven by this placeholder
+    result_ph = st.empty()
 
-    # Show existing results if available (from history or previous run)
     def show_results(results, topic):
         with result_ph.container():
             tab_r, tab_s, tab_sc, tab_f = st.tabs(
@@ -305,7 +302,7 @@ with right:
         </div>""", unsafe_allow_html=True)
 
 
-# ─── Run pipeline (synchronous, no st.rerun inside) ───────────────────────────
+# ─── Run pipeline (synchronous) ───────────────────────────────────────────────
 if run_clicked and topic_input.strip():
     topic = topic_input.strip()
     st.session_state["done"] = False
@@ -316,7 +313,6 @@ if run_clicked and topic_input.strip():
     start = time.time()
     error_msg = None
 
-    # right panel: show spinner while working
     result_ph.markdown("""
     <div style='text-align:center;padding:80px 20px;color:#475569'>
         <div style='font-size:3rem;margin-bottom:14px'>⚙️</div>
@@ -331,7 +327,7 @@ if run_clicked and topic_input.strip():
     try:
         from agents import build_research_agent, build_reader_agent, writer_chain, critic_chain
 
-        # ── Step 1 ──────────────────────────────────────
+        # ── Step 1: Search ──────────────────────────────
         set_step(1, "running")
         search_agent = build_research_agent()
         sr = search_agent.invoke({"messages": [
@@ -340,28 +336,46 @@ if run_clicked and topic_input.strip():
         results["search_results"] = sr["messages"][-1].content
         set_step(1, "done")
 
-        # ── Step 2 ──────────────────────────────────────
+        # Rate-limit cooldown before Step 2
+        time.sleep(12)
+
+        # ── Step 2: Reader ──────────────────────────────
         set_step(2, "running")
         reader_agent = build_reader_agent()
+        
+        # Truncate input to keep prompt tokens small
+        search_summary = results['search_results'][:500]
+        
         rr = reader_agent.invoke({"messages": [(
             "user",
             f"Based on the following search results about '{topic}', "
             f"pick the most relevant URL and scrape it for deeper content.\n\n"
-            f"Search Results:\n{results['search_results'][:800]}"
+            f"Search Results:\n{search_summary}"
         )]})
         results["scraped_content"] = rr["messages"][-1].content
         set_step(2, "done")
 
-        # ── Step 3 ──────────────────────────────────────
+        # Rate-limit cooldown before Step 3
+        time.sleep(15)
+
+        # ── Step 3: Writer ──────────────────────────────
         set_step(3, "running")
-        combined = (f"SEARCH RESULT:\n{results['search_results']}\n\n"
-                    f"DETAILED SCRAPED CONTENT:\n{results['scraped_content']}")
+        
+        # Truncate research context to remain safely under the TPM limit
+        trimmed_search = results['search_results'][:1500]
+        trimmed_scraped = results['scraped_content'][:1500]
+        combined = (f"SEARCH RESULT:\n{trimmed_search}\n\n"
+                    f"DETAILED SCRAPED CONTENT:\n{trimmed_scraped}")
+
         results["report"] = writer_chain.invoke({"topic": topic, "research": combined})
         set_step(3, "done")
 
-        # ── Step 4 ──────────────────────────────────────
+        # Rate-limit cooldown before Step 4
+        time.sleep(12)
+
+        # ── Step 4: Critic ──────────────────────────────
         set_step(4, "running")
-        results["feedback"] = critic_chain.invoke({"report": results["report"]})
+        results["feedback"] = critic_chain.invoke({"report": results["report"][:2000]})
         set_step(4, "done")
 
     except ImportError as e:
@@ -385,7 +399,6 @@ if run_clicked and topic_input.strip():
     if error_msg:
         result_ph.error(error_msg, icon="🚨")
     else:
-        # Save results & history
         st.session_state["results"] = results
         st.session_state["elapsed"] = elapsed
         st.session_state["done"] = True
@@ -394,7 +407,6 @@ if run_clicked and topic_input.strip():
         })
         st.session_state["history"] = st.session_state["history"][:10]
 
-        # Show stat chips
         stats_ph.markdown(f"""
         <div class="stat-row">
             <div class="stat-chip">⏱ Time <b>{elapsed}s</b></div>
@@ -402,5 +414,4 @@ if run_clicked and topic_input.strip():
             <div class="stat-chip">✅ Status <b>Complete</b></div>
         </div>""", unsafe_allow_html=True)
 
-        # Render final results in-place
         show_results(results, topic)

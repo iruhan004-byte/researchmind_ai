@@ -239,7 +239,7 @@ with st.sidebar:
 # ─── Hero ─────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="hero-banner">
-    <div class="hero-badge">✨ Powered by LangGraph + Groq</div>
+    <div class="hero-badge">✨ Powered by LangGraph + Google Gemini</div>
     <div class="hero-title">ResearchMind AI</div>
     <div class="hero-sub">A four-agent pipeline that searches, reads, writes and critiques — so you don't have to.</div>
 </div>""", unsafe_allow_html=True)
@@ -251,7 +251,7 @@ left, right = st.columns([1, 1.35], gap="large")
 with left:
     st.markdown("#### 🎯 Research Topic")
     topic_input = st.text_input("topic", label_visibility="collapsed",
-                                placeholder="e.g. Quantum computing breakthroughs in 2025")
+                                placeholder="e.g. Quantum computing breakthroughs")
 
     run_clicked = st.button("🚀  Launch Research Pipeline",
                             disabled=not topic_input.strip())
@@ -338,16 +338,12 @@ if run_clicked and topic_input.strip():
         results["search_results"] = sr["messages"][-1].content
         set_step(1, "done")
 
-        # Rate-limit cooldown before Step 2
-        time.sleep(12)
-
         # ── Step 2: Reader ──────────────────────────────
         current_step = 2
         set_step(2, "running")
         reader_agent = build_reader_agent()
         
-        # Truncate input to keep prompt tokens small
-        search_summary = results['search_results'][:500]
+        search_summary = results['search_results'][:2000]
         
         rr = reader_agent.invoke({"messages": [(
             "user",
@@ -358,29 +354,22 @@ if run_clicked and topic_input.strip():
         results["scraped_content"] = rr["messages"][-1].content
         set_step(2, "done")
 
-        # Rate-limit cooldown before Step 3
-        time.sleep(15)
-
         # ── Step 3: Writer ──────────────────────────────
         current_step = 3
         set_step(3, "running")
         
-        # Truncate research context to remain safely under the TPM limit
-        trimmed_search = results['search_results'][:1500]
-        trimmed_scraped = results['scraped_content'][:1500]
+        trimmed_search = results['search_results'][:4000]
+        trimmed_scraped = results['scraped_content'][:4000]
         combined = (f"SEARCH RESULT:\n{trimmed_search}\n\n"
                     f"DETAILED SCRAPED CONTENT:\n{trimmed_scraped}")
 
         results["report"] = writer_chain.invoke({"topic": topic, "research": combined})
         set_step(3, "done")
 
-        # Rate-limit cooldown before Step 4
-        time.sleep(12)
-
         # ── Step 4: Critic ──────────────────────────────
         current_step = 4
         set_step(4, "running")
-        results["feedback"] = critic_chain.invoke({"report": results["report"][:2000]})
+        results["feedback"] = critic_chain.invoke({"report": results["report"][:4000]})
         set_step(4, "done")
         current_step = None
 

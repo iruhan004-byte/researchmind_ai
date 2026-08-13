@@ -10,9 +10,11 @@ from tools import scrape_webpage, duckduckgo_search
 load_dotenv()
 
 # Get key from st.secrets if using Streamlit secrets, or fallback to environment variable
-api_key = st.secrets.get("GOOGLE_API_KEY") if hasattr(st, "secrets") and "GOOGLE_API_KEY" in st.secrets else os.getenv("GOOGLE_API_KEY")
+try:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+except Exception:
+    api_key = os.getenv("GOOGLE_API_KEY")
 
-# Initialize Gemini 1.5 Flash
 llm = ChatGoogleGenerativeAI(
     model="gemini-1.5-flash",
     temperature=0,
